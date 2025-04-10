@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Button, Spinner } from 'react-bootstrap';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
@@ -8,51 +8,52 @@ import Backend_Url from '../config/Backendurl';
 const Userlogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-  
+    setLoading(true);
+
     try {
       const res = await axios.post(`${Backend_Url}user/userlogin`, {
-        email,
-        password,
+        email: email.trim(),
+        password: password.trim(),
       });
-  
+
       const user = res.data.user;
-  
-      localStorage.setItem('userEmail', email);
-  
+      localStorage.setItem('user', JSON.stringify(user));
+
       if (!user.assigned) {
         Swal.fire({
           icon: 'info',
           title: 'Not Assigned',
           text: 'You are not assigned to any tasks yet. Please contact admin.',
         }).then(() => {
-          navigate('/userdashboard'); // Still navigate after showing alert
+          navigate('/userdashboard');
         });
       } else {
         Swal.fire({
           toast: true,
-          position: 'top',
+          position: 'top-end',
           icon: 'success',
           title: `Welcome, ${user.name}`,
           showConfirmButton: false,
           timer: 2000,
           timerProgressBar: true,
         });
-  
-        navigate('/userdashboard'); // Navigate normally
+        navigate('/userdashboard');
       }
     } catch (error) {
       Swal.fire({
         icon: 'error',
         title: 'Login Failed',
-        text: error.response?.data?.message || 'Invalid credentials',
+        text: error.response?.data?.message || 'Something went wrong. Please try again.',
       });
+    } finally {
+      setLoading(false);
     }
   };
-  
 
   return (
     <Container className="d-flex align-items-center justify-content-center" style={{ minHeight: '100vh' }}>
@@ -85,8 +86,14 @@ const Userlogin = () => {
                 </Form.Group>
 
                 <div className="d-grid">
-                  <Button variant="dark" type="submit">
-                    Login
+                  <Button variant="dark" type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Spinner animation="border" size="sm" /> Logging in...
+                      </>
+                    ) : (
+                      'Login'
+                    )}
                   </Button>
                 </div>
               </Form>
