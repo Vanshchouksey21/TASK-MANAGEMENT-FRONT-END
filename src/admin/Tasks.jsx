@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Table, Container, Modal, Button, Form } from 'react-bootstrap';
+import Swal from 'sweetalert2';
 import Backend_Url from '../config/Backendurl';
 
 const Tasks = () => {
@@ -13,13 +14,11 @@ const Tasks = () => {
 
   // Load all users
   const ld = async () => {
-    let api = `${Backend_Url}admin/userdisplay`;
-
     try {
-      const res = await axios.get(api);
+      const res = await axios.get(`${Backend_Url}admin/userdisplay`);
       setMyd(res.data);
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   };
 
@@ -27,13 +26,11 @@ const Tasks = () => {
     ld();
   }, []);
 
-  // When "Assign Task" button is clicked
   const handleAssignClick = (user) => {
     setSelectedUser(user);
     setShowModal(true);
   };
 
-  // Close the modal
   const handleClose = () => {
     setShowModal(false);
     setTask('');
@@ -41,10 +38,9 @@ const Tasks = () => {
     setCompletionDate('');
   };
 
-  // Submit task to backend (if needed)
   const handleSubmit = async () => {
     if (!task || !taskDesc || !completionDate) {
-      alert('Please fill all fields.');
+      Swal.fire('Please fill all fields');
       return;
     }
 
@@ -55,19 +51,76 @@ const Tasks = () => {
       completionDate,
     };
 
-    console.log('Assigning Task:', payload);
-
     try {
       const res = await axios.post(`${Backend_Url}admin/assigntask`, payload);
-      console.log(res.data);
-      alert('Task assigned successfully!');
+      Swal.fire('✅ Task assigned successfully!');
       handleClose();
     } catch (err) {
       console.error(err);
-      alert('Error assigning task.');
+      Swal.fire('❌ Error assigning task.');
     }
+  };
 
-    handleClose(); // remove this if backend is connected
+  const handleDelete = async (id) => {
+    try {
+      const confirm = await Swal.fire({
+        title: 'Are you sure?',
+        text: 'This action will delete the user!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete!',
+        cancelButtonText: 'Cancel',
+      });
+
+      if (confirm.isConfirmed) {
+        await axios.delete(`${Backend_Url}admin/deleteuser/${id}`);
+        Swal.fire('✅ User deleted successfully!');
+        ld();
+      }
+    } catch (err) {
+      console.error(err);
+      Swal.fire('❌ Error deleting user.');
+    }
+  };
+
+  const checkAndShowTaskButtons = async (userId) => {
+    try {
+      const res = await axios.get(`${Backend_Url}admin/usertasks/${userId}`);
+      const tasks = res.data;
+
+      const latestCompleted = tasks
+        .filter(t => t.isCompletedByUser && t.status === 'Pending')
+        .pop();
+
+      if (!latestCompleted) {
+        Swal.fire('⚠️ No completed task waiting for verification.');
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Mark Task as:',
+        showDenyButton: true,
+        confirmButtonText: 'Correct ✅',
+        denyButtonText: 'Not Correct ❌',
+      });
+
+      if (result.isConfirmed) {
+        await axios.put(`${Backend_Url}admin/updatetaskstatus`, {
+          taskId: latestCompleted._id,
+          status: 'Correct',
+        });
+        Swal.fire('✅ Marked as Correct');
+      } else if (result.isDenied) {
+        await axios.put(`${Backend_Url}admin/updatetaskstatus`, {
+          taskId: latestCompleted._id,
+          status: 'Not Correct',
+        });
+        Swal.fire('❌ Marked as Not Correct');
+      }
+    } catch (err) {
+      console.error(err);
+      Swal.fire('❌ Error fetching or updating task.');
+    }
   };
 
   return (
@@ -91,8 +144,28 @@ const Tasks = () => {
               <td>{user.role}</td>
               <td>{user.password}</td>
               <td>
-                <Button variant="primary" onClick={() => handleAssignClick(user)}>
+                <Button
+                  variant="primary"
+                  onClick={() => handleAssignClick(user)}
+                  className="me-2 mb-1"
+                >
                   ASSIGN TASK
+                </Button>
+
+                <Button
+                  variant="danger"
+                  onClick={() => handleDelete(user._id)}
+                  className="me-2 mb-1"
+                >
+                  DELETE
+                </Button>
+
+                <Button
+                  variant="info"
+                  onClick={() => checkAndShowTaskButtons(user._id)}
+                  className="mb-1"
+                >
+                  CHECK TASK
                 </Button>
               </td>
             </tr>
